@@ -1,5 +1,7 @@
 package riceball.xyz.indicator;
 
+import static android.graphics.Paint.ANTI_ALIAS_FLAG;
+
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
@@ -17,8 +19,6 @@ import android.util.TypedValue;
 import android.view.View;
 
 import java.io.Serializable;
-
-import static android.graphics.Paint.ANTI_ALIAS_FLAG;
 
 public class InfiniteCirclePageIndicator extends View implements ViewPager.OnPageChangeListener {
 
@@ -124,7 +124,8 @@ public class InfiniteCirclePageIndicator extends View implements ViewPager.OnPag
 
 
     class PoContainer implements Serializable {
-        public static final float SCALE_RATIO = 0.5f;
+        public static final float SCALE_SMALL_RATIO = 0.3f;
+        public static final float SCALE_NORMAL_RATIO = 0.6f;
         SparseArray<Po> pos;
         Paint soldPaint;
         Paint selectedPaint;
@@ -155,16 +156,18 @@ public class InfiniteCirclePageIndicator extends View implements ViewPager.OnPag
 
             for (int i = 0; i < dataCount; i++) {
                 Po po = new Po().setIndex(i).setDrawX(getDrawX(i)).setDrawY(getDrawY(i));
-                if (i == 0 || i == dataCount - 1 || controlLine.include(i)) {
+                if (i == selectedIndex) {
                     po.setRadius(getRadius());
+                } else if (i == 0 || i == dataCount - 1 || controlLine.include(i)) {
+                    po.setRadius(getRadius() * SCALE_NORMAL_RATIO);
                 } else {
-                    po.setRadius(getRadius() * SCALE_RATIO);
+                    po.setRadius(getRadius() * SCALE_SMALL_RATIO);
                 }
                 if (controlLine.isFirst(i) && controlLine.canMove(i - 1)) {
-                    po.setRadius(getRadius() * SCALE_RATIO);
+                    po.setRadius(getRadius() * SCALE_SMALL_RATIO);
                 }
                 if (controlLine.isLast(i) && controlLine.canMove(i + 1)) {
-                    po.setRadius(getRadius() * SCALE_RATIO);
+                    po.setRadius(getRadius() * SCALE_SMALL_RATIO);
                 }
                 pos.put(i, po);
             }
@@ -211,13 +214,13 @@ public class InfiniteCirclePageIndicator extends View implements ViewPager.OnPag
             if (controlLine.include(position)) {
                 if (controlLine.isFirst(position) && controlLine.canMove(controlLine.index - 1)) {
                     controlLine.moveTo(controlLine.index - 1);
-                    doAnim(lastSelectedIndex);
                 } else if (controlLine.isLast(position) && controlLine.canMove(controlLine.index + 1)) {
                     controlLine.moveTo(controlLine.index + 1);
-                    doAnim(lastSelectedIndex);
+                    //doAnim(lastSelectedIndex);
                 } else {
                     //...
                 }
+                doAnim(lastSelectedIndex);
             } else {
                 controlLine.moveTo(selectedIndex);
                 offset = getOffset(selectedIndex);
@@ -226,7 +229,7 @@ public class InfiniteCirclePageIndicator extends View implements ViewPager.OnPag
             invalidate();
         }
 
-        private void doAnim(int lastSelectedIndex) {
+        private void doAnim(final int lastSelectedIndex) {
             animLastSelectedIndex = lastSelectedIndex;
             AnimatorSet animatorSet = new AnimatorSet();
             ValueAnimator animator = ValueAnimator.ofInt(offset, getOffset(controlLine.index));
@@ -238,8 +241,8 @@ public class InfiniteCirclePageIndicator extends View implements ViewPager.OnPag
             });
             animator.setDuration(200);
 
-            ValueAnimator scaleDownAnimator = ValueAnimator.ofFloat(1f, SCALE_RATIO);
-            scaleDownAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            ValueAnimator scaleDownSmallAnimator = ValueAnimator.ofFloat(SCALE_NORMAL_RATIO, SCALE_SMALL_RATIO);
+            scaleDownSmallAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                 @Override
                 public void onAnimationUpdate(ValueAnimator animation) {
                     Po left = pos.get(controlLine.getFirst());
@@ -253,21 +256,52 @@ public class InfiniteCirclePageIndicator extends View implements ViewPager.OnPag
                     }
                 }
             });
-            scaleDownAnimator.setDuration(200);
+            scaleDownSmallAnimator.setDuration(200);
+
             //
-            ValueAnimator scaleUpAnimator = ValueAnimator.ofFloat(SCALE_RATIO, 1f);
-            scaleUpAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            ValueAnimator scaleUpNormalAnimator = ValueAnimator.ofFloat(SCALE_SMALL_RATIO, SCALE_NORMAL_RATIO);
+            scaleUpNormalAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                 @Override
                 public void onAnimationUpdate(ValueAnimator animation) {
                     for (int i = controlLine.index; i < controlLine.index + controlLine.length; i++) {
                         Po po = pos.get(i);
-                        if (po != null && po.radius != PoContainer.this.getRadius() && !controlLine.isFirst(i) && !controlLine.isLast(i)) {
+                        if (po != null &&  po.radius != PoContainer.this.getRadius() * SCALE_NORMAL_RATIO && !controlLine.isFirst(i) && !controlLine.isLast(i)
+                            /*&& i != selectedIndex*/) {
                             po.radius = PoContainer.this.getRadius() * (float) animation.getAnimatedValue();
                         }
                     }
                 }
             });
-            scaleUpAnimator.setDuration(200);
+            scaleUpNormalAnimator.setDuration(200);
+
+            ValueAnimator scaleDownNormalAnimator = ValueAnimator.ofFloat(1f, SCALE_NORMAL_RATIO);
+            scaleDownNormalAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                @Override
+                public void onAnimationUpdate(ValueAnimator animation) {
+                    for (int i = controlLine.index; i < controlLine.index + controlLine.length; i++) {
+                        Po po = pos.get(i);
+                        if (po != null && !controlLine.isFirst(i) && !controlLine.isLast(i) && lastSelectedIndex == i) {
+                            po.radius = PoContainer.this.getRadius() * (float) animation.getAnimatedValue();
+                        }
+                    }
+                }
+            });
+            scaleDownNormalAnimator.setDuration(200);
+
+            ValueAnimator scaleUpBigAnimator = ValueAnimator.ofFloat(SCALE_NORMAL_RATIO, 1f);
+            scaleDownNormalAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                @Override
+                public void onAnimationUpdate(ValueAnimator animation) {
+                    for (int i = controlLine.index; i < controlLine.index + controlLine.length; i++) {
+                        Po po = pos.get(i);
+                        if (po != null && po.radius != PoContainer.this.getRadius() && selectedIndex == i) {
+                            po.radius = PoContainer.this.getRadius() * (float) animation.getAnimatedValue();
+                        }
+                    }
+                }
+            });
+            scaleUpBigAnimator.setDuration(200);
+
             animatorSet.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationStart(Animator animation) {
@@ -282,7 +316,8 @@ public class InfiniteCirclePageIndicator extends View implements ViewPager.OnPag
                     inAnim = false;
                 }
             });
-            animatorSet.playTogether(animator, scaleDownAnimator, scaleUpAnimator);
+            animatorSet.playTogether(animator, scaleDownSmallAnimator, scaleUpNormalAnimator/*,
+            scaleDownNormalAnimator, scaleUpBigAnimator*/);
             animatorSet.start();
         }
 
